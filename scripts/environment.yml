@@ -1,0 +1,15 @@
+name: atac
+channels:
+- defaults
+- r
+- conda-forge
+- bioconda
+dependecies:
+- python=2.7
+- trimmomatic=0.36
+- bowtie2=2.3.4.1
+- picard=2.18.4
+- bedtools=2.27.1
+- homer=4.9.1
+- samtools=1.8
+- macs2=2.1.1.20160309
