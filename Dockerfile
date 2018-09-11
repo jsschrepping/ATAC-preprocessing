@@ -2,7 +2,7 @@
 FROM conda/miniconda2
 
 # File Author / Maintainer
-MAINTAINER JAY-doq
+MAINTAINER JAY-DoQ
 
 COPY environment.yml .
 
