@@ -16,7 +16,7 @@ fastq_format = """@{i}
 def get_reference(fasta):
     with open(fasta) as f:
         # strip the first line (contains only >chrM)
-        return "".join(map(lambda s: s.replace("\n",""), f.readlines()[1:]))
+        return "".join(map(lambda s: s.replace("\n", ""), f.readlines()[1:]))
 
 
 def get_random_substring(string, length=10):
@@ -24,11 +24,18 @@ def get_random_substring(string, length=10):
     return string[start:start+length]
 
 
-def get_fastqs(ref, fq_len=4, seq_len=100, read_len=10):
+def get_phred(read_len, min_quality):
+    phred = "".join([
+        chr(random.choice(range(ord(min_quality), ord('Z'))))
+        for i in range(read_len)])
+    return phred
+
+
+def get_fastqs(ref, fq_len=4, seq_len=100, read_len=10, min_quality='2'):
     fq = [[], []]
     for i in range(fq_len):
         seq = get_random_substring(ref, length=seq_len)
-        phred = "K"*read_len
+        phred = get_phred(read_len, min_quality)
         fq[0].append(fastq_format.format(
             i=i, sequence=seq[:read_len], phred=phred))
         fq[1].append(fastq_format.format(
@@ -59,7 +66,8 @@ def main(args):
         nsplit=args.nsplit,
         fq_len=args.fq_len,
         seq_len=args.seq_len,
-        read_len=args.read_len
+        read_len=args.read_len,
+        min_quality=args.min_quality
     )
 
 
@@ -70,6 +78,7 @@ if __name__ == '__main__':
     parser.add_argument('--fq_len', default=4, type=int)
     parser.add_argument('--seq_len', default=100, type=int)
     parser.add_argument('--read_len', default=10, type=int)
+    parser.add_argument('--min_quality', default="2", type=str)
     parser.add_argument('fasta', type=str)
     parser.add_argument('outputdir', type=str)
     args = parser.parse_args()
