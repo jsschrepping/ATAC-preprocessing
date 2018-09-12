@@ -2,7 +2,9 @@
 FROM conda/miniconda3
 
 # File Author / Maintainer
-MAINTAINER JAY-DoQ
+MAINTAINER JAY-Doq
+
+SHELL ["/bin/bash","-c"]
 
 COPY environments /environments
 
