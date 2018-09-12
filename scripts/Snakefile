@@ -1,0 +1,119 @@
+from pathlib import Path
+
+
+def get_samples(fastqdir):
+    """Given a path `fastqdir` returns a dictionary `samples`, such that
+    `samples[sample_name][1]` (or `2`) is a list of files
+    containing R1 or R2 respectively.
+
+    """
+
+    files = Path(fastqdir).glob('**/*_R1_*.fastq.gz')
+    samples = dict()
+
+    for f in files:
+        sample = f.name.split("_")[0]
+
+        if sample not in samples:
+            samples[sample] = {'1': [], '2': []}
+
+        R1 = str(f)
+        R2 = str(f).replace("_R1_","_R2_")
+
+        samples[sample]['1'].append(R1)
+        samples[sample]['2'].append(R2)
+
+    return samples
+
+
+samples = get_samples("/fastq")
+
+indexname = "minimal"
+
+indexfiles = [
+    "/index/bowtie2/{index}.1.bt2",
+    "/index/bowtie2/{index}.2.bt2",
+    "/index/bowtie2/{index}.3.bt2",
+    "/index/bowtie2/{index}.4.bt2",
+    "/index/bowtie2/{index}.rev.1.bt2",
+    "/index/bowtie2/{index}.rev.2.bt2"]
+
+rule all:
+    input:
+        expand("mapped/{sample}.bam", sample=samples.keys()),
+        "qc/trimmomatic.html"
+
+rule bowtie2index:
+    input:
+        "/index/{index}.fasta"
+    output:
+        indexfiles
+    log:
+        "logs/index/{index}_bowtie2.log"
+    shell:
+        "bowtie2-build {input} /index/bowtie2/{wildcards.index} > {log}"
+
+rule bowtie2align:
+    input:
+        sample=[
+            "trimmed/{sample}_R1.fastq",
+            "trimmed/{sample}_R2.fastq"],
+        index=expand(indexfiles, index=[indexname])
+    output:
+        "mapped/{sample}.bam"
+    log:
+        "logs/bowtie2/{sample}.log"
+    params:
+        index="/index/bowtie2/"+indexname,  # prefix of reference genome index
+        extra=""
+    threads: 8
+    wrapper:
+        "0.27.1/bio/bowtie2/align"
+
+rule multiqc_trimmomatic:
+    input:
+        expand("logs/trimmomatic/{sample}.log", sample=samples.keys())
+    output:
+        "qc/trimmomatic.html"
+    params:
+        ""
+    log:
+        "logs/multiqc/trimmomatic.log"
+    wrapper:
+        "0.27.1/bio/multiqc"
+
+rule trimmomatic_pe:
+    input:
+        r1="data/{sample}_R1.fastq",
+        r2="data/{sample}_R2.fastq"
+    output:
+        r1=pipe("trimmed/{sample}_R1.fastq"),
+        r2=pipe("trimmed/{sample}_R2.fastq"),
+        # reads where trimming entirely removed the mate
+        r1_unpaired="trimmed/{sample}_R1.unpaired.fastq",
+        r2_unpaired="trimmed/{sample}_R2.unpaired.fastq"
+    log:
+        "logs/trimmomatic/{sample}.log"
+    params:
+        # list of trimmers (see manual)
+        trimmer=["TRAILING:3"],
+        # optional parameters
+        extra="-phred33"
+    wrapper:
+        "0.27.1/bio/trimmomatic/pe"
+
+rule merge:
+    input:
+        lambda wildcards: samples[wildcards.sample][wildcards.read]
+    output:
+        pipe("data/{sample}_R{read}.fastq")
+    log:
+        "logs/merging/{sample}_R{read}_merge.log"
+    shell:
+        """
+        echo {input} | tr ' ' '\n' > {log};
+        zcat {input} > {output}"""
+
+rule clean:
+    shell:
+        "rm -rf /output/* /index/bowtie2"
