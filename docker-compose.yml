@@ -1,4 +1,8 @@
 version: '3'
 services:
-    atac: 
-        build: .
+  atac:
+    build: .
+    volumes:
+      - ./test/fastq-generated:/fastq:ro
+      - ./test/index:/index:rw
+      - ./test/output:/output:rw

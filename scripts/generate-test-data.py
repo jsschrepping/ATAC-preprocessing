@@ -7,9 +7,6 @@ import os
 
 random.seed(0)
 
-fasta = "../test/index/minimal.fasta"
-outputdir = "../test/fastq-generated/"
-
 fastq_format = """@{i}
 {sequence}
 +
