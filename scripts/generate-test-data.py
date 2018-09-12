@@ -48,7 +48,7 @@ def generate_samples(ref, outputdir, nsamples=10, nsplit=2, **kwargs):
                 fname = "{outputdir}/{s:04}_S1_L001_R{r}_{split:03}.fastq.gz".format(
                     outputdir=outputdir, s=s, r=r, split=split)
                 with gzip.open(fname, "wb") as f:
-                    f.write(fq[r-1].encode('ascii'))
+                    f.write((fq[r-1]+"\n").encode('ascii'))
 
 
 def main(args):
