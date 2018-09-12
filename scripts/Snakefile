@@ -27,36 +27,60 @@ def get_samples(fastqdir):
 
 
 samples = get_samples("/fastq")
-index = "minimal"
+
+indexname = "minimal"
+
+indexfiles = [
+    "/index/bowtie2/{index}.1.bt2",
+    "/index/bowtie2/{index}.2.bt2",
+    "/index/bowtie2/{index}.3.bt2",
+    "/index/bowtie2/{index}.4.bt2",
+    "/index/bowtie2/{index}.rev.1.bt2",
+    "/index/bowtie2/{index}.rev.2.bt2"]
 
 rule all:
     input:
-        expand("/output/data/{sample}_merged_R{read}.fastq.gz",
-               sample=samples.keys(), read=[1, 2]),
-        expand("/index/bowtie2/{index}.{i}.bt2", index=[index], i=[1,2,3,4]),
-        expand("/index/bowtie2/{index}.rev.{i}.bt2", index=[index], i=[1,2])
-
+        expand("mapped/{sample}.bam", sample=samples.keys()),
 
 rule bowtie2index:
     input:
         "/index/{index}.fasta"
     output:
-        expand("/index/bowtie2/{{index}}.{i}.bt2", i=[1,2,3,4]),
-        expand("/index/bowtie2/{{index}}.rev.{i}.bt2", i=[1,2])
+        indexfiles
     log:
-        "/output/logs/index/{index}_bowtie2.log"
+        "logs/index/{index}_bowtie2.log"
     shell:
-        "bowtie2-build {input} /index/bowtie2/{index} > {log}"
+        "bowtie2-build {input} /index/bowtie2/{wildcards.index} > {log}"
 
+rule bowtie2align:
+    input:
+        sample=[
+            "data/{sample}_R1.fastq",
+            "data/{sample}_R2.fastq"],
+        index=expand(indexfiles, index=[indexname])
+    output:
+        "mapped/{sample}.bam"
+    log:
+        "logs/bowtie2/{sample}.log"
+    params:
+        index="/index/bowtie2/"+indexname,  # prefix of reference genome index
+        extra=""
+    threads: 8
+    wrapper:
+        "0.27.1/bio/bowtie2/align"
 
 rule merge:
     input:
         lambda wildcards: samples[wildcards.sample][wildcards.read]
     output:
-        temp("/output/data/{sample}_merged_R{read}.fastq.gz")
+        "data/{sample}_R{read}.fastq"
     log:
-        "/output/logs/{sample}_R{read}_merge.log"
+        "logs/{sample}_R{read}_merge.log"
     shell:
         """
         echo {input} | tr ' ' '\n' > {log};
         zcat {input} > {output}"""
+
+rule clean:
+    shell:
+        "rm -rf /output/* /index/bowtie2"
