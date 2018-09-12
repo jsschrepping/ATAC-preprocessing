@@ -1,0 +1,46 @@
+from pathlib import Path
+
+
+def get_samples(fastqdir):
+    """Given a path `fastqdir` returns a dictionary `samples`, such that
+    `samples[sample_name][1]` (or `2`) is a list of files
+    containing R1 or R2 respectively.
+
+    """
+
+    files = Path(fastqdir).glob('**/*_R1_*.fastq.gz')
+    samples = dict()
+
+    for f in files:
+        sample = f.name.split("_")[0]
+
+        if sample not in samples:
+            samples[sample] = {'1': [], '2': []}
+
+        R1 = str(f)
+        R2 = str(f).replace("_R1_","_R2_")
+
+        samples[sample]['1'].append(R1)
+        samples[sample]['2'].append(R2)
+
+    return samples
+
+
+samples = get_samples("/fastq")
+
+rule all:
+    input:
+        expand("/output/data/{sample}_merged_R{read}.fastq.gz",
+               sample=samples.keys(), read=[1, 2])
+
+rule merge:
+    input:
+        lambda wildcards: samples[wildcards.sample][wildcards.read]
+    output:
+        temp("/output/data/{sample}_merged_R{read}.fastq.gz")
+    log:
+        "/output/logs/{sample}_{read}_merge.txt"
+    shell:
+        """
+        echo {input} > {log};
+        zcat {input} > {output}"""
