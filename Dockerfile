@@ -17,3 +17,6 @@ RUN conda env create -f /environments/atac.yml &&\
 SHELL ["/bin/bash", "-c"]
 
 RUN source activate atac
+
+ENV LC_ALL=C.UTF-8
+ENV LANG=C.UTF-8

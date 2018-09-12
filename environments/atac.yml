@@ -13,3 +13,4 @@ dependencies:
   - homer=4.9.1
   - samtools=1.8
   - ncurses=5.9
+  - multiqc=1.6
