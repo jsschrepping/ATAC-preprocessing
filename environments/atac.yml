@@ -1,9 +1,9 @@
 name: atac
 channels:
-  - defaults
   - r
   - conda-forge
   - bioconda
+  - default
 dependencies:
   - snakemake=5.2.4
   - trimmomatic=0.36
@@ -12,3 +12,4 @@ dependencies:
   - bedtools=2.27.1
   - homer=4.9.1
   - samtools=1.8
+  - ncurses=5.9
