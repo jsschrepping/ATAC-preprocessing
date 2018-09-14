@@ -16,7 +16,10 @@ RUN conda env create -f /environments/atac.yml &&\
 
 SHELL ["/bin/bash", "-c"]
 
-RUN source activate atac
+RUN echo "source activate atac" > ~/.bashrc
+ENV PATH /usr/local/envs/atac/bin:$PATH
 
 ENV LC_ALL=C.UTF-8
 ENV LANG=C.UTF-8
+
+CMD ["snakemake", "--directory", "/output","--jobs","4"]
