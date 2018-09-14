@@ -1,12 +1,8 @@
 from pathlib import Path
 
-
 def get_samples(fastqdir):
     """Given a path `fastqdir` returns a dictionary `samples`, such that
-    `samples[sample_name][1]` (or `2`) is a list of files
-    containing R1 or R2 respectively.
-
-    """
+    `samples[sample_name][1]` (or `2`) is a list of files containing R1 or R2 respectively."""
 
     files = Path(fastqdir).glob('**/*_R1_*.fastq.gz')
     samples = dict()
@@ -38,11 +34,15 @@ indexfiles = [
     "/index/bowtie2/{index}.rev.1.bt2",
     "/index/bowtie2/{index}.rev.2.bt2"]
 
+# First rule defines the output of the snakemake file as its input
 rule all:
     input:
         expand("mapped/{sample}.bam", sample=samples.keys()),
-        "qc/trimmomatic.html"
+        "qc/trimmomatic.html",
+        "qc/trimmedfastqc.html",
+        "qc/bowtie2.html"
 
+# The order of all subsequent rules does not matter
 rule bowtie2index:
     input:
         "/index/{index}.fasta"
@@ -87,8 +87,8 @@ rule trimmomatic_pe:
         r1="data/{sample}_R1.fastq",
         r2="data/{sample}_R2.fastq"
     output:
-        r1=pipe("trimmed/{sample}_R1.fastq"),
-        r2=pipe("trimmed/{sample}_R2.fastq"),
+        r1=temp("trimmed/{sample}_R1.fastq"),
+        r2=temp("trimmed/{sample}_R2.fastq"),
         # reads where trimming entirely removed the mate
         r1_unpaired="trimmed/{sample}_R1.unpaired.fastq",
         r2_unpaired="trimmed/{sample}_R2.unpaired.fastq"
@@ -102,11 +102,53 @@ rule trimmomatic_pe:
     wrapper:
         "0.27.1/bio/trimmomatic/pe"
 
+        
+# include fastqc into the docker and write a rule that takes
+# trimmed/{sample}_R1/R2.fastq as input
+rule trimmedfastqc:
+    input:
+        "trimmed/{sample}_R1.fastq",
+        "trimmed/{sample}_R2.fastq"
+    output:
+        html="qc/fastqc/trimmed/{sample}.html",
+        zip="qc/fastqc/trimmed/{sample}_fastqc.zip"
+    params: ""
+    log:
+        "logs/fastqc/trimmed/{sample}.log"
+    wrapper:
+        "0.27.1/bio/fastqc"
+        
+        
+rule multiqc_trimmedfastqc:
+    input:
+        expand("qc/fastqc/trimmed/{sample}_fastqc.zip", sample=samples.keys())
+    output:
+        "qc/trimmedfastqc.html"
+    params:
+        ""
+    log:
+        "logs/multiqc/trimmedfastqc.log"
+    wrapper:
+        "0.27.1/bio/multiqc"
+
+rule multiqc_bowtie2:
+    input:
+        expand("logs/bowtie2/{sample}.log", sample=samples.keys())
+    output:
+        "qc/bowtie2.html"
+    params:
+        ""
+    log:
+        "logs/multiqc/bowtie2.log"
+    wrapper:
+        "0.27.1/bio/multiqc"
+       
+
 rule merge:
     input:
         lambda wildcards: samples[wildcards.sample][wildcards.read]
     output:
-        pipe("data/{sample}_R{read}.fastq")
+        temp("data/{sample}_R{read}.fastq")
     log:
         "logs/merging/{sample}_R{read}_merge.log"
     shell:
