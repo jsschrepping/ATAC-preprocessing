@@ -22,4 +22,6 @@ ENV PATH /usr/local/envs/atac/bin:$PATH
 ENV LC_ALL=C.UTF-8
 ENV LANG=C.UTF-8
 
-CMD ["snakemake", "--directory", "/output","--jobs","4"]
+COPY scripts /scripts
+
+CMD ["snakemake", "--directory", "/output","--snakefile", "/scripts/Snakefile","--jobs","4"]

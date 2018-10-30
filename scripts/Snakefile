@@ -1,26 +1,6 @@
 from pathlib import Path
 
-def get_samples(fastqdir):
-    """Given a path `fastqdir` returns a dictionary `samples`, such that
-    `samples[sample_name][1]` (or `2`) is a list of files containing R1 or R2 respectively."""
-
-    files = Path(fastqdir).glob('**/*_R1_*.fastq.gz')
-    samples = dict()
-
-    for f in files:
-        sample = f.name.split("_")[0]
-
-        if sample not in samples:
-            samples[sample] = {'1': [], '2': []}
-
-        R1 = str(f)
-        R2 = str(f).replace("_R1_","_R2_")
-
-        samples[sample]['1'].append(R1)
-        samples[sample]['2'].append(R2)
-
-    return samples
-
+include: "snakemake-scripts.py"
 
 samples = get_samples("/fastq")
 
@@ -34,13 +14,14 @@ indexfiles = [
     "/index/bowtie2/{index}.rev.1.bt2",
     "/index/bowtie2/{index}.rev.2.bt2"]
 
+# choose config to be paired, single or auto
+mode = get_mode(samples)
+
 # First rule defines the output of the snakemake file as its input
 rule all:
     input:
         expand("mapped/{sample}.bam", sample=samples.keys()),
-        "qc/trimmomatic.html",
-        "qc/trimmedfastqc.html",
-        "qc/bowtie2.html"
+        "qc/multiqc.html"
 
 # The order of all subsequent rules does not matter
 rule bowtie2index:
@@ -55,9 +36,7 @@ rule bowtie2index:
 
 rule bowtie2align:
     input:
-        sample=[
-            "trimmed/{sample}_R1.fastq",
-            "trimmed/{sample}_R2.fastq"],
+        sample=lambda wildcards: single_or_paired_input(wildcards,mode),
         index=expand(indexfiles, index=[indexname])
     output:
         "mapped/{sample}.bam"
@@ -69,46 +48,56 @@ rule bowtie2align:
     threads: 8
     wrapper:
         "0.27.1/bio/bowtie2/align"
-
-rule multiqc_trimmomatic:
+        
+rule trimmomatic_se:
     input:
-        expand("logs/trimmomatic/{sample}.log", sample=samples.keys())
+        "merged/{sample}_R1.fastq"
     output:
-        "qc/trimmomatic.html"
-    params:
-        ""
+        temp("trimmed/single/{sample}_R1.fastq")
     log:
-        "logs/multiqc/trimmomatic.log"
+        "logs/trimmomatic/single/{sample}.log"
+    params:
+        # list of trimmers (see manual)
+        trimmer=["TRAILING:3",
+                 "LEADING:3",
+                 "MINLEN:10",
+                 "SLIDINGWINDOW:4:20",
+                 "ILLUMINACLIP:NexteraPE-PE.fa:2:30:10"],
+        # optional parameters
+        extra="-phred33"
     wrapper:
-        "0.27.1/bio/multiqc"
+        "0.27.1/bio/trimmomatic/se"
+    
 
 rule trimmomatic_pe:
     input:
-        r1="data/{sample}_R1.fastq",
-        r2="data/{sample}_R2.fastq"
+        r1="merged/{sample}_R1.fastq",
+        r2="merged/{sample}_R2.fastq"
     output:
-        r1=temp("trimmed/{sample}_R1.fastq"),
-        r2=temp("trimmed/{sample}_R2.fastq"),
+        r1=temp("trimmed/paired/{sample}_R1.fastq"),
+        r2=temp("trimmed/paired/{sample}_R2.fastq"),
         # reads where trimming entirely removed the mate
-        r1_unpaired="trimmed/{sample}_R1.unpaired.fastq",
-        r2_unpaired="trimmed/{sample}_R2.unpaired.fastq"
+        r1_unpaired="trimmed/paired/{sample}_R1.unpaired.fastq",
+        r2_unpaired="trimmed/paired/{sample}_R2.unpaired.fastq"
     log:
-        "logs/trimmomatic/{sample}.log"
+        "logs/trimmomatic/paired/{sample}.log"
     params:
         # list of trimmers (see manual)
-        trimmer=["TRAILING:3"],
+        trimmer=["TRAILING:3",
+                 "LEADING:3",
+                 "MINLEN:10",
+                 "SLIDINGWINDOW:4:20",
+                 "ILLUMINACLIP:NexteraPE-PE.fa:2:30:10"],
         # optional parameters
         extra="-phred33"
     wrapper:
         "0.27.1/bio/trimmomatic/pe"
-
         
 # include fastqc into the docker and write a rule that takes
 # trimmed/{sample}_R1/R2.fastq as input
 rule trimmedfastqc:
     input:
-        "trimmed/{sample}_R1.fastq",
-        "trimmed/{sample}_R2.fastq"
+        lambda wildcards: single_or_paired_input(wildcards,mode)
     output:
         html="qc/fastqc/trimmed/{sample}.html",
         zip="qc/fastqc/trimmed/{sample}_fastqc.zip"
@@ -117,45 +106,33 @@ rule trimmedfastqc:
         "logs/fastqc/trimmed/{sample}.log"
     wrapper:
         "0.27.1/bio/fastqc"
-        
-        
-rule multiqc_trimmedfastqc:
-    input:
-        expand("qc/fastqc/trimmed/{sample}_fastqc.zip", sample=samples.keys())
-    output:
-        "qc/trimmedfastqc.html"
-    params:
-        ""
-    log:
-        "logs/multiqc/trimmedfastqc.log"
-    wrapper:
-        "0.27.1/bio/multiqc"
 
-rule multiqc_bowtie2:
+rule multiqc:
     input:
+        expand("logs/trimmomatic/{mode}/{sample}.log", mode=[mode], sample=samples.keys()),
+        expand("qc/fastqc/trimmed/{sample}_fastqc.zip", sample=samples.keys()),
         expand("logs/bowtie2/{sample}.log", sample=samples.keys())
     output:
-        "qc/bowtie2.html"
+        "qc/multiqc.html"
     params:
         ""
     log:
-        "logs/multiqc/bowtie2.log"
+        "logs/multiqc/multiqc.log"
     wrapper:
         "0.27.1/bio/multiqc"
-       
 
 rule merge:
     input:
         lambda wildcards: samples[wildcards.sample][wildcards.read]
     output:
-        temp("data/{sample}_R{read}.fastq")
+        temp("merged/{sample}_R{read}.fastq")
     log:
         "logs/merging/{sample}_R{read}_merge.log"
     shell:
         """
         echo {input} | tr ' ' '\n' > {log};
         zcat {input} > {output}"""
-
+     
 rule clean:
     shell:
         "rm -rf /output/* /index/bowtie2"
