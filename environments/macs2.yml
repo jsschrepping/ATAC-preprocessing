@@ -1,5 +1,0 @@
-name: macs2
-channels:
-  - bioconda
-dependencies:
-  - macs2=2.1.1.20160309
