@@ -1,6 +1,8 @@
 channels:
+  - anaconda
   - bioconda
   - conda-forge
+  - cctbx202112
 dependencies:
   - bc =1.06
   - sambamba =0.7.0

@@ -1,6 +1,7 @@
 channels:
   - bioconda
   - conda-forge
+  - cctbx202112
 dependencies:
-  - macs2 =2.1.2
-  - python =2.7
+  - macs2 =2.2.7.1
+  - python =3.6

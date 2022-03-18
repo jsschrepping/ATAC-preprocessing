@@ -1,0 +1,1 @@
+docker run -it --rm --name ATAC_preprocessing -v path/to/data/:/data/ -v path/to/data/fastq/merged_fastq/:/data/fastq/merged_fastq/ -v path/to/bowtie2-indexfiles/:/data/bowtie2-indexfiles/ -v path/to/tmp/:/tmp/ snakemake/snakemake:v7.2.1 /bin/bash

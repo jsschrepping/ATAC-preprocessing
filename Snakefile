@@ -2,19 +2,20 @@
 Author: J. Schulte-Schrepping
 Affiliation: LIMES, Uni Bonn
 Aim: A simple Snakemake workflow to process paired-end stranded ATAC-Seq.
-Date: 20190528
+Date: 20220316
 Run: snakemake --use-conda   
-Docker: docker run -it --rm --name ATAC_preprocessing -v /path/to/data/:/data/ -v /path/to/index/:/data/bowtie2-indexfiles/ -v /path/to/tmp/:/tmp/ jsschrepping/bioinfo-base-image:jss_v0.0.2 /bin/bash
+Docker: docker run -it --rm --name ATAC_preprocessing -v /path/to/data/:/data/ -v /path/to/index/:/data/bowtie2-indexfiles/ -v /path/to/tmp/:/tmp/ snakemake/snakemake:v7.2.1 /bin/bash
 """
 
-SAMPLES=["1111", "2222", "3333"] #exchange sample IDs according to your data
+SAMPLES=["sample1", "sample2"] 
+
 READS=["R1", "R2"]
 
 ### Target rule ###
 
 rule all:
     input:
-        expand("output/qc/fastqc/Sample_{sample}_{read}_fastqc.html", sample=SAMPLES, read=READS),
+        expand("output/qc/fastqc/Sample_{sample}_{read}_init_fastqc.html", sample=SAMPLES, read=READS),
         expand("output/trimmed/Sample_{sample}_{read}.fastq.gz", sample=SAMPLES, read=READS),
         expand("output/qc/fastqc/Sample_{sample}_{read}_trimmed_fastqc.html", sample=SAMPLES, read=READS),
         expand("output/mapped/Sample_{sample}.final.bam",sample=SAMPLES),
@@ -26,34 +27,21 @@ rule all:
         expand("output/mapped/Sample_{sample}.subsample.bw",sample=SAMPLES),
         expand("output/peaks/Sample_{sample}_peaks.xls",sample=SAMPLES),
         expand("output/peaks/Sample_{sample}_subsample_peaks.xls",sample=SAMPLES),
-        "output/qc/multiqc_raw.html",
         "output/qc/multiqc.html"
 
-### raw fastq ###
+### Initial QC ###
 
-rule fastqc_raw:
+rule fastqc_init:
     input:
         "/data/fastq/merged_fastq/Sample_{sample}_{read}.fastq.gz"
     output:
-        html="output/qc/fastqc/Sample_{sample}_{read}_fastqc.html",
-        zip="output/qc/fastqc/Sample_{sample}_{read}_fastqc.zip"
+        html="output/qc/fastqc/Sample_{sample}_{read}_init_fastqc.html",
+        zip="output/qc/fastqc/Sample_{sample}_{read}_init_fastqc.zip"
     params: ""
     log:
-        "output/logs/fastqc/Sample_{sample}_{read}.log"
+        "output/logs/fastqc/Sample_{sample}_{read}_init.log"
     wrapper:
-        "0.34.0/bio/fastqc"
-
-rule multiqc_raw:
-    input:
-        expand("output/qc/fastqc/Sample_{sample}_{read}_fastqc.zip",zip,sample=SAMPLES,read=READS)
-    output:
-        "output/qc/multiqc_raw.html"
-    log:
-        "output/logs/multiqc_raw.log"
-    params:
-        ""
-    wrapper:
-        "0.34.0/bio/multiqc"
+        "v1.3.0/bio/fastqc"
 
 ### Adapter trimming ###
 
@@ -70,13 +58,13 @@ rule trimmomatic_pe:
     log:
         "output/logs/trimmomatic/Sample_{sample}.log"
     params:
-        trimmer=["ILLUMINACLIP:NexteraPE-PE.fa:2:30:10 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:25 MINLEN:36"],
+        trimmer=["ILLUMINACLIP:NexteraPE-PE.fa:2:30:10 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:25 MINLEN:36 CROP:48"],
         extra="",
         compression_level="-9"
     threads:
-        32
+        16
     wrapper:
-        "0.35.0/bio/trimmomatic/pe"
+        "v1.3.0/bio/trimmomatic/pe"
 
 rule fastqc_trimmed:
     input:
@@ -88,7 +76,7 @@ rule fastqc_trimmed:
     log:
         "output/logs/fastqc/Sample_{sample}_{read}_trimmed.log"
     wrapper:
-        "0.34.0/bio/fastqc"
+        "v1.3.0/bio/fastqc"
 
 ### alignment ###
 
@@ -118,11 +106,11 @@ rule samtools_sort:
     log:
         "output/logs/samtools/Sample_{sample}.log"
     params:
-        "-m 4G"
+        extra="-m 4G"
     threads:
         8
     wrapper:
-        "0.35.0/bio/samtools/sort"
+        "v1.3.0/bio/samtools/sort"
 
 ### ATAC processing ###
 
@@ -135,9 +123,9 @@ rule remove_duplicates:
     log:
         "output/logs/picard_dedup/Sample_{sample}.log"
     params:
-        "REMOVE_DUPLICATES=true"
+        "--REMOVE_DUPLICATES true"
     wrapper:
-        "0.35.0/bio/picard/markduplicates"
+        "v1.3.0/bio/picard/markduplicates"
 
 rule index_dedup:
     input:
@@ -147,7 +135,7 @@ rule index_dedup:
     params:
         ""
     wrapper:
-        "0.35.0/bio/samtools/index"
+        "v1.3.0/bio/samtools/index"
 
 rule remove_offset:
     input:
@@ -172,11 +160,11 @@ rule sort_final:
     log:
         "output/logs/samtools/Sample_{sample}.log"
     params:
-        "-m 4G"
+        extra="-m 4G"
     threads:
         8
     wrapper:
-        "0.35.0/bio/samtools/sort"
+        "v1.3.0/bio/samtools/sort"
 
 rule index_final:
     input:
@@ -185,8 +173,10 @@ rule index_final:
         protected("output/mapped/Sample_{sample}.final.bai")
     params:
         "" # optional params string
+    threads:
+        4
     wrapper:
-        "0.35.0/bio/samtools/index"
+        "v1.3.0/bio/samtools/index"
 
 rule samtools_flagstat:
     input:
@@ -194,7 +184,7 @@ rule samtools_flagstat:
     output:
         "output/mapped/Sample_{sample}.final.flagstat"
     wrapper:
-        "0.35.0/bio/samtools/flagstat"
+        "v1.3.0/bio/samtools/flagstat"
 
 ### subsample ###
 
@@ -212,7 +202,7 @@ rule subsample:
     shell:
         """
         nreads=$(samtools view -c {input})
-        rate=$(echo "scale=5;10000000/$nreads" | bc)
+        rate=$(echo "scale=5;2000000/$nreads" | bc)
         sambamba view -f bam -t 5 --subsampling-seed=42 -s $rate {input} | samtools sort -m 4G -@ 8 -T - > {output} 2> {log}
         """
 
@@ -224,7 +214,7 @@ rule index_subsample:
     params:
         "" # optional params string
     wrapper:
-        "0.35.0/bio/samtools/index"
+        "v1.3.0/bio/samtools/index"
 
 ### BigWig ###
 
@@ -264,7 +254,7 @@ rule macs2_full:
     log:
         "output/logs/macs2/Sample_{sample}.log"
     shell:
-        "macs2 callpeak -t {input} -f BAM -g mm --outdir output/peaks -n {params.sample} 2> {log}"
+        "macs2 callpeak -t {input} -f BAM -g hs --nomodel --extsize 50 --outdir output/peaks -n {params.sample} 2> {log}"
 
 rule macs2_subsample:
     input:
@@ -278,12 +268,13 @@ rule macs2_subsample:
     log:
         "output/logs/macs2/Sample_{sample}.subsample.log"
     shell:
-        "macs2 callpeak -t {input} -f BAM -g mm --outdir output/peaks -n {params.sample} 2> {log}"
+        "macs2 callpeak -t {input} -f BAM -g hs --nomodel --extsize 50 --outdir output/peaks -n {params.sample} 2> {log}"
 
 ### Complete QC ###
 
 rule multiqc:
     input:
+        expand("output/qc/fastqc/Sample_{sample}_{read}_init_fastqc.zip",zip,sample=SAMPLES,read=READS),
         expand("output/qc/fastqc/Sample_{sample}_{read}_trimmed_fastqc.zip",zip,sample=SAMPLES,read=READS),
         expand("output/logs/bowtie2/Sample_{sample}.log", sample=SAMPLES),
         expand("output/peaks/Sample_{sample}_peaks.xls", sample=SAMPLES),
@@ -295,4 +286,4 @@ rule multiqc:
     params:
         ""
     wrapper:
-        "0.34.0/bio/multiqc"
+        "v1.3.0/bio/multiqc"
