@@ -4,10 +4,10 @@ Affiliation: LIMES, Uni Bonn
 Aim: A simple Snakemake workflow to process paired-end stranded ATAC-Seq.
 Date: 20220316
 Run: snakemake --use-conda   
-Docker: docker run -it --rm --name ATAC_preprocessing -v /path/to/data/:/data/ -v /path/to/index/:/data/bowtie2-indexfiles/ -v /path/to/tmp/:/tmp/ snakemake/snakemake:v7.2.1 /bin/bash
+Docker: docker run -it --rm --name ATAC_preprocessing -v /path/to/data/:/data/ -v /path/to/index/:/data/bowtie2-indexfiles/ -v /path/to/tmp/:/tmp/ jsschrepping/bioinfo-base-image:jss_v0.0.2 /bin/bash
 """
 
-SAMPLES=["sample1", "sample2"] 
+SAMPLES=["17502", "17503", "17504", "17505", "17506", "17507", "17508", "17509", "17510", "17511", "17512", "17513", "17514", "17515", "17516", "17517", "17518", "17519", "17520", "17521", "17522", "17523", "17524", "17525", "17526", "17527", "17528", "17529", "17530", "17531", "17532", "17533", "17534", "17535", "17536", "17537", "17538", "17539", "17540"] 
 
 READS=["R1", "R2"]
 
@@ -27,6 +27,8 @@ rule all:
         expand("output/mapped/Sample_{sample}.subsample.bw",sample=SAMPLES),
         expand("output/peaks/Sample_{sample}_peaks.xls",sample=SAMPLES),
         expand("output/peaks/Sample_{sample}_subsample_peaks.xls",sample=SAMPLES),
+        "output/mapped/merged.bam",
+        "output/peaks/merged_peaks.xls",
         "output/qc/multiqc.html"
 
 ### Initial QC ###
@@ -269,6 +271,38 @@ rule macs2_subsample:
         "output/logs/macs2/Sample_{sample}.subsample.log"
     shell:
         "macs2 callpeak -t {input} -f BAM -g hs --nomodel --extsize 50 --outdir output/peaks -n {params.sample} 2> {log}"
+
+
+### Merge bam files
+
+rule samtools_merge:
+    input:
+        expand("output/mapped/Sample_{sample}.final.bam", sample=SAMPLES),
+    output:
+        "output/mapped/merged.bam",
+    log:
+        "output/logs/samtools/merge.log",
+    params:
+        extra="",  # optional additional parameters as string
+    threads: 8
+    wrapper:
+        "v1.3.1/bio/samtools/merge"
+
+### Call peaks on merged bam file
+
+rule macs2_merged:
+    input:
+        "output/mapped/merged.bam"
+    output:
+        xls="output/peaks/merged_peaks.xls"
+    params:
+        sample="merged"
+    conda:
+        "envs/macs2.yaml"
+    log:
+        "output/logs/macs2/merged.log"
+    shell:
+        "macs2 callpeak -t {input} -f BAM -g hs --outdir output/peaks -n {params.sample} 2> {log}"
 
 ### Complete QC ###
 
